@@ -85,24 +85,17 @@ Di akhir PDF tertulis: **LV1 = merah, LV2 = biru, LV3 = maroon**. Soal berwarna 
 | Typo | "Mempu" (172b), "Breada" (140d), "danpa" (194), "dam" (207), "alan napas" (207), "haris" (204), "cai" (201), "Meniggalkan" (22a), dll. | Diperbaiki saat penyusunan `seed/questions.json`, lalu direview bersama sebelum seed final |
 
 ### 4.5 Strategi Ekstraksi
-1. Soal ditranskripsi ke file sumber kebenaran **`prisma/seed/questions.json`** yang di-commit ke repo dan bisa direview di PR.
-2. Struktur per soal:
+1. Soal ditranskripsi ke tiga file sumber kebenaran per tipe, yaitu **`prisma/seed/data/{single,multiple,true-false}.json`**, yang di-commit ke repo dan bisa direview di PR. Daftar koreksi dan catatan SME ada di [`prisma/seed/README.md`](../prisma/seed/README.md).
+2. Format ringkas per soal (opsi berlabel A–E sesuai urutan array):
    ```json
-   {
-     "number": 1,
-     "type": "SINGLE",
-     "level": "LV1",
-     "groupKey": null,
-     "text": "Sebelum menjalankan mesin cetakan, apa yang perlu diperiksa terlebih dahulu?",
-     "textZh": null,
-     "options": [
-       { "label": "A", "text": "Keadaan mental pekerja", "textZh": null, "isCorrect": false },
-       { "label": "B", "text": "Fungsi normal mesin cetakan", "textZh": null, "isCorrect": true }
-     ]
-   }
+   { "number": 1, "level": "LV1", "text": "Sebelum menjalankan mesin cetakan, …?",
+     "options": ["Keadaan mental pekerja", "Fungsi normal mesin cetakan", "…"], "answer": "B" }
+   { "number": 109, "level": "LV1", "groupKey": "…", "options": ["…"], "answer": ["A", "C", "D"] }
+   { "number": 239, "level": "GENERAL", "text": "…", "textZh": "…", "answer": true }
    ```
-3. Validasi file dengan Zod sebelum seed. Aturannya: SINGLE dan TRUE_FALSE tepat 1 jawaban benar; MULTIPLE minimal 1 jawaban benar; nomor unik 1–250; label opsi berurutan.
-4. `prisma db seed` melakukan **upsert berdasarkan `number`** supaya seed bisa dijalankan ulang (idempotent) tanpa menghapus riwayat ujian.
+3. Validasi dengan Zod (`src/lib/validation/question-bank.ts`) sebelum seed. Aturannya: kunci harus menunjuk opsi yang ada, label kunci unik, panjang `optionsZh` sama dengan `options`, field asing ditolak, nomor unik di semua file, dan setiap `groupKey` dipakai minimal 2 soal. Data lalu dinormalisasi menjadi `Question` + `Option` (`isCorrect`), dan soal Benar/Salah menjadi dua opsi `BENAR` / `SALAH`.
+4. `prisma db seed` (`prisma/seed/seed.mts`) bersifat idempoten. Soal baru dimasukkan secara bulk, soal yang berubah di-update dengan opsi di-upsert per label (ID opsi tetap), dan soal yang hilang dari file dinonaktifkan.
+5. `tests/question-bank.test.ts` mencocokkan **seluruh 250 kunci** dengan tabel kunci yang ditranskripsi terpisah, serta memvalidasi pemetaan level.
 
 ---
 
@@ -245,8 +238,9 @@ prisma/
   schema.prisma
   migrations/
   seed/
-    questions.json          # bank soal sumber kebenaran
-    seed.ts                 # validasi Zod + upsert
+    data/                   # bank soal sumber kebenaran: single / multiple / true-false .json
+    seed.mts                # validasi Zod + upsert idempoten
+    README.md               # level, groupKey, log koreksi, catatan SME
 prisma.config.ts            # Prisma 7: datasource URL & seed command
 src/
   app/
@@ -291,7 +285,7 @@ src/
 tests/
   scoring.test.ts
   question-picker.test.ts
-  seed-data.test.ts         # validasi questions.json (250 soal, kunci valid)
+  question-bank.test.ts     # validasi data seed + cocokkan 250 kunci
 ```
 
 ### 8.3 Model Data (Prisma)

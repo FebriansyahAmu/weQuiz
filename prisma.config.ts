@@ -7,7 +7,7 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
-    seed: "tsx prisma/seed/seed.ts",
+    seed: "tsx prisma/seed/seed.mts",
   },
   datasource: {
     // Session pooler (port 5432): migrations need a session-scoped connection.
