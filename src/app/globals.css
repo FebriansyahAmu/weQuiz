@@ -133,6 +133,11 @@
     border-radius: 6px;
   }
 
+  /* Native modals don't lock page scroll on their own. */
+  html:has(dialog[open]) {
+    overflow: hidden;
+  }
+
   ::selection {
     background: color-mix(in oklab, var(--molten-from) 45%, transparent);
   }
