@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum QuestionType {
+  SINGLE
+  MULTIPLE
+  TRUE_FALSE
+}
+
+enum QuestionLevel {
+  LV1
+  LV2
+  LV3
+  GENERAL
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+}
+
+/// Bank soal. `number` adalah nomor asli di dokumen sumber (1–250).
+model Question {
+  id               String            @id @default(cuid())
+  number           Int               @unique
+  type             QuestionType
+  level            QuestionLevel
+  /// Soal mirip/duplikat berbagi groupKey agar tidak muncul bersamaan dalam satu sesi.
+  groupKey         String?
+  text             String
+  textZh           String?
+  isActive         Boolean           @default(true)
+  options          Option[]
+  attemptQuestions AttemptQuestion[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([type, level, isActive])
+}
+
+model Option {
+  id         String   @id @default(cuid())
+  questionId String
+  /// "A".."E" untuk pilihan, "BENAR" / "SALAH" untuk soal benar/salah.
+  label      String
+  text       String
+  textZh     String?
+  isCorrect  Boolean
+  order      Int
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, label])
+}
+
+model Attempt {
+  id              String            @id @default(cuid())
+  participantName String
+  presetKey       String
+  status          AttemptStatus     @default(IN_PROGRESS)
+  startedAt       DateTime          @default(now())
+  /// null = tanpa batas waktu.
+  expiresAt       DateTime?
+  submittedAt     DateTime?
+  totalQuestions  Int
+  correctCount    Int?
+  wrongCount      Int?
+  unansweredCount Int?
+  /// Persentase 0.00–100.00, diisi saat submit.
+  score           Decimal?          @db.Decimal(5, 2)
+  questions       AttemptQuestion[]
+
+  @@index([status, startedAt])
+}
+
+/// Snapshot soal yang terpilih untuk satu attempt beserta jawaban peserta.
+model AttemptQuestion {
+  id                String    @id @default(cuid())
+  attemptId         String
+  questionId        String
+  position          Int
+  /// Kosong = belum dijawab.
+  selectedOptionIds String[]  @default([])
+  flagged           Boolean   @default(false)
+  /// Diisi saat submit.
+  isCorrect         Boolean?
+  answeredAt        DateTime?
+  attempt           Attempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question          Question  @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@unique([attemptId, position])
+  @@index([questionId])
+}
