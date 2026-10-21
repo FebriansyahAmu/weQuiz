@@ -1,18 +1,16 @@
 import { z } from "zod";
+import {
+  OPTION_LABELS,
+  QUESTION_LEVELS,
+  type OptionLabel,
+  type QuestionLevelValue,
+  type QuestionTypeValue,
+} from "@/lib/domain";
 
 /**
  * Question bank source format (prisma/seed/data/*.json) and its normalization
  * into database-ready records. Pure module: shared by the seed script and tests.
  */
-
-export const OPTION_LABELS = ["A", "B", "C", "D", "E"] as const;
-export type OptionLabel = (typeof OPTION_LABELS)[number];
-
-export const QUESTION_TYPES = ["SINGLE", "MULTIPLE", "TRUE_FALSE"] as const;
-export type QuestionTypeValue = (typeof QUESTION_TYPES)[number];
-
-export const QUESTION_LEVELS = ["LV1", "LV2", "LV3", "GENERAL"] as const;
-export type QuestionLevelValue = (typeof QUESTION_LEVELS)[number];
 
 /** True/false questions are stored as two fixed options so grading is uniform. */
 export const TRUE_FALSE_OPTIONS = [

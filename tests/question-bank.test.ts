@@ -1,12 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  parseQuestionBank,
-  QuestionBankError,
-  type QuestionLevelValue,
-  type QuestionSeedRecord,
-} from "@/lib/validation/question-bank";
+import type { QuestionLevelValue } from "@/lib/domain";
+import { parseQuestionBank, QuestionBankError, type QuestionSeedRecord } from "@/lib/validation/question-bank";
 
 const dataDir = path.join(import.meta.dirname, "..", "prisma", "seed", "data");
 const readJson = (file: string): unknown => JSON.parse(readFileSync(path.join(dataDir, file), "utf8"));

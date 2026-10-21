@@ -254,8 +254,9 @@ src/
       attempts/[id]/route.ts                  # GET   state attempt (soal publik + jawaban)
       attempts/[id]/answers/route.ts          # PUT   simpan jawaban (autosave)
       attempts/[id]/submit/route.ts           # POST  submit & nilai
-    actions/
-      start-exam.ts                  # server action untuk form landing
+      attempts/[id]/result/route.ts           # GET   hasil (hanya setelah selesai)
+      attempts/[id]/review/route.ts           # GET   pembahasan + kunci (hanya setelah selesai)
+      health/route.ts                         # GET   cek koneksi DB
   components/
     ui/                     # primitif: Button, Card, Dialog, Sheet, Badge, Progress, Toast
     exam/                   # QuestionCard, OptionItem, TrueFalseToggle, Navigator, ExamHeader, SubmitDialog, Timer
@@ -266,13 +267,19 @@ src/
     useCountdown.ts
   lib/
     cn.ts
-    validation/             # skema Zod bersama (input form & API)
+    domain.ts               # konstanta tipe/level/status soal (aman untuk client)
+    random.ts               # shuffle + PRNG ber-seed (untuk tes)
+    validation/             # skema Zod bersama (input form & API, bank soal)
     format.ts
   config/
     exam-presets.ts
   server/
     db.ts
-    errors.ts
+    env.ts
+    errors.ts               # AppError + pemetaan kode → HTTP status
+    http.ts                 # handleRoute, parseJsonBody, parseAttemptId
+    actions/
+      start-exam.ts         # server action untuk form landing
     dal/
       questions.dal.ts
       attempts.dal.ts
@@ -365,12 +372,16 @@ Catatan desain:
 
 | Method & Path | Body / Respon | Catatan |
 |---|---|---|
-| `POST /api/attempts` | `{ name, presetKey }` → `{ attemptId }` | Juga tersedia sebagai Server Action `startExam` untuk form landing |
-| `GET /api/attempts/:id` | → `{ attempt, questions: PublicQuestionDTO[], answers }` | Jika status `SUBMITTED`, client diarahkan ke halaman hasil |
-| `PUT /api/attempts/:id/answers` | `{ questionId, selectedOptionIds, flagged? }` → `{ savedAt }` | Idempotent (upsert). Ditolak `409` jika terkunci/expired |
-| `POST /api/attempts/:id/submit` | → `{ score, correct, wrong, unanswered }` | Idempotent: submit kedua mengembalikan hasil yang sama |
+| `POST /api/attempts` | `{ name, presetKey }` → `201 { attemptId }` | Juga tersedia sebagai Server Action `startExam` (`src/server/actions`) untuk form landing |
+| `GET /api/attempts/:id` | → `AttemptSessionDTO` (soal publik, jawaban, `remainingSeconds`) | Tanpa kunci. Attempt yang lewat batas waktu otomatis dinilai (`EXPIRED`), dan client diarahkan ke hasil jika status ≠ `IN_PROGRESS` |
+| `PUT /api/attempts/:id/answers` | `{ questionId, selectedOptionIds, flagged? }` → `{ savedAt }` | Idempotent. `400 INVALID_ANSWER` (opsi bukan milik soal / >1 untuk Tunggal & B/S), `409 ATTEMPT_LOCKED`, `409 TIME_EXPIRED` |
+| `POST /api/attempts/:id/submit` | → `AttemptResultDTO` | Idempotent dan aman terhadap submit bersamaan (status diubah lewat conditional update di dalam transaksi) |
+| `GET /api/attempts/:id/result` | → `AttemptResultDTO` | `409 ATTEMPT_NOT_FINISHED` jika belum selesai |
+| `GET /api/attempts/:id/review` | → `AttemptReviewDTO` (dengan `isCorrect`) | Hanya untuk attempt yang sudah selesai |
 
-Validasi input untuk semua endpoint: Zod. Respon error berbentuk `{ error: { code, message } }`.
+Validasi input untuk semua endpoint: Zod. Respon error berbentuk `{ error: { code, message, details? } }`, dengan `message` dalam Bahasa Indonesia yang siap ditampilkan. ID yang formatnya salah dilaporkan sebagai `404 ATTEMPT_NOT_FOUND`. Batas waktu diberi toleransi 5 detik untuk autosave terakhir.
+
+**Paket ujian (implementasi):** `standar` (25/15/10, 60 menit), `lv1` dan `lv2` (25/15/10 dari level tsb + UMUM, 60 menit), `lv3` (30/10/10, karena LV3 tidak punya soal Multi/B-S sendiri, 60 menit), dan `lengkap` (250 soal, tanpa timer). Setiap preset diuji 300× terhadap bank soal asli agar selalu bisa terisi.
 
 ### 8.5 Database & Prisma 7 + Supabase
 - Versi Prisma dikunci di **7.10.1** (`prisma` & `@prisma/client`), karena dist-tag `latest` CLI saat ini menunjuk ke 8.0.0-rc.
