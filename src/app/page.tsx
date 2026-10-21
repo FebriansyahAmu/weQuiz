@@ -1,7 +1,7 @@
 import { CheckSquare, CircleDot, Save, ShieldCheck, ToggleLeft } from "lucide-react";
 import { ResumeBanner } from "@/components/landing/ResumeBanner";
 import { StartExamForm } from "@/components/landing/StartExamForm";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { SiteHeader } from "@/components/ui/SiteHeader";
 
 const questionTypes = [
   { icon: CircleDot, label: "Pilihan Tunggal", hint: "Satu jawaban paling tepat" },
@@ -19,15 +19,7 @@ export default function Home() {
     <>
       <div aria-hidden className="bg-molten fixed inset-x-0 top-0 z-50 h-0.5" />
 
-      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
-        <div className="flex items-center gap-3">
-          <span className="bg-molten text-on-molten font-display shadow-card grid size-9 place-items-center rounded-xl text-sm font-bold">
-            wQ
-          </span>
-          <span className="font-display text-lg font-semibold tracking-tight">weQuiz</span>
-        </div>
-        <ThemeToggle />
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pt-6 pb-16 sm:px-8 lg:grid-cols-[1fr_minmax(0,30rem)] lg:gap-16 lg:pt-14">
         <section className="flex flex-col gap-8 lg:sticky lg:top-14">
@@ -48,7 +40,7 @@ export default function Home() {
             {questionTypes.map(({ icon: Icon, label, hint }) => (
               <li key={label} className="border-border bg-surface/70 flex items-center gap-3 rounded-2xl border p-3.5">
                 <span className="bg-accent-soft text-accent grid size-9 shrink-0 place-items-center rounded-xl">
-                  <Icon aria-hidden className="size-[1.125rem]" />
+                  <Icon aria-hidden className="size-4.5" />
                 </span>
                 <span className="flex flex-col leading-tight">
                   <span className="font-display text-sm font-semibold">{label}</span>

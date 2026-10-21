@@ -223,6 +223,9 @@ export async function getAttemptReview(id: string): Promise<AttemptReviewDTO> {
 
   return {
     attemptId: attempt.id,
+    participantName: attempt.participantName,
+    status: attempt.status,
+    score: attempt.score?.toNumber() ?? 0,
     questions: attempt.questions.map(({ position, selectedOptionIds, flagged, isCorrect, question }) => ({
       ...question,
       position,

@@ -180,8 +180,10 @@ Konteks aplikasi ini adalah pabrik pengecoran nikel: logam cair, panas, dan kese
 |---|---|
 | **Landing `/`** | Hero singkat (judul ujian, divisi, jumlah soal per preset), input nama dengan fokus otomatis, kartu pilihan preset, tombol **Mulai Ujian**. Banner "Lanjutkan ujian, {nama}?" jika ada attempt aktif |
 | **Ujian `/exam/[attemptId]`** | Header sticky: nama peserta, timer, progres `12/50`, indikator simpan. Kartu soal: badge tipe + level, nomor, teks, opsi. Footer sticky: Sebelumnya · Ragu-ragu · Berikutnya. Navigator: sidebar di desktop (≥ 1024 px), **bottom sheet** di HP |
-| **Hasil `/result/[attemptId]`** | Cincin skor animasi (angka naik 0 → skor), label predikat, kartu statistik (Benar/Salah/Kosong/Durasi), bar per tipe soal, tombol **Lihat Pembahasan** dan **Ujian Lagi** |
-| **Review `/result/[attemptId]/review`** | Daftar soal dengan penanda ✓/✗, opsi peserta vs kunci (hijau = kunci, merah = pilihan salah), filter "Semua / Salah / Kosong" |
+| **Hasil `/result/[attemptId]`** | Cincin skor animasi (angka naik 0 → skor), label predikat, kartu statistik (Benar/Salah/Kosong/Durasi), bar per tipe soal, tombol **Lihat Pembahasan** dan **Ujian Lagi**. Kartu Benar/Salah/Kosong menautkan langsung ke pembahasan dengan filter tersebut |
+| **Review `/result/[attemptId]/review`** | Daftar soal dikelompokkan per tipe, dengan penanda ✓/✗, opsi peserta vs kunci (hijau = kunci, merah = pilihan salah, dan selalu disertai label teks "Kunci" / "Pilihan Anda"), filter "Semua / Benar / Salah / Kosong / Ragu-ragu" (tersimpan di `?filter=`), peta jawaban berwarna (sidebar di desktop, bottom sheet di HP) untuk lompat ke soal |
+
+**Predikat skor (implementasi, `src/config/grading.ts`):** ≥ 90 *Istimewa*, ≥ 75 *Baik*, ≥ 60 *Cukup*, < 60 *Perlu belajar lagi*. Predikat ini hanya deskriptif. Selama KKM belum diputuskan (§12 no. 4), UI tidak menampilkan "lulus" atau "tidak lulus".
 
 ### 7.3 Interaktivitas
 - Animasi dengan **Motion** (`motion/react`): transisi antar soal (slide + fade, 200–250 ms), animasi pegas saat memilih opsi, *count-up* skor, stagger pada kartu hasil. Semua menghormati `prefers-reduced-motion`.
@@ -260,7 +262,8 @@ src/
   components/
     ui/                     # primitif: Button, Card, Dialog, Sheet, Badge, Progress, Toast
     exam/                   # QuestionCard, OptionItem, TrueFalseToggle, Navigator, ExamHeader, SubmitDialog, Timer
-    result/                 # ScoreRing, StatCard, TypeBreakdown, ReviewItem
+    result/                 # ScoreRing, StatGrid, TypeBreakdown, ResultSkeleton
+    review/                 # ReviewExplorer (filter + peta), ReviewItem, ReviewMap
   hooks/
     useAutosave.ts
     useExamKeyboard.ts
@@ -270,7 +273,8 @@ src/
     domain.ts               # konstanta tipe/level/status soal (aman untuk client)
     random.ts               # shuffle + PRNG ber-seed (untuk tes)
     validation/             # skema Zod bersama (input form & API, bank soal)
-    format.ts
+    format.ts               # skor, durasi, tanggal (id-ID)
+    review-filter.ts        # filter pembahasan (dipakai juga untuk deep-link dari hasil)
   config/
     exam-presets.ts
   server/
@@ -377,9 +381,9 @@ Catatan desain:
 | `PUT /api/attempts/:id/answers` | `{ questionId, selectedOptionIds, flagged? }` → `{ savedAt }` | Idempotent. `400 INVALID_ANSWER` (opsi bukan milik soal / >1 untuk Tunggal & B/S), `409 ATTEMPT_LOCKED`, `409 TIME_EXPIRED` |
 | `POST /api/attempts/:id/submit` | → `AttemptResultDTO` | Idempotent dan aman terhadap submit bersamaan (status diubah lewat conditional update di dalam transaksi) |
 | `GET /api/attempts/:id/result` | → `AttemptResultDTO` | `409 ATTEMPT_NOT_FINISHED` jika belum selesai |
-| `GET /api/attempts/:id/review` | → `AttemptReviewDTO` (dengan `isCorrect`) | Hanya untuk attempt yang sudah selesai |
+| `GET /api/attempts/:id/review` | → `AttemptReviewDTO` (`participantName`, `status`, `score`, soal dengan `isCorrect`) | Hanya untuk attempt yang sudah selesai |
 
-Validasi input untuk semua endpoint: Zod. Respon error berbentuk `{ error: { code, message, details? } }`, dengan `message` dalam Bahasa Indonesia yang siap ditampilkan. ID yang formatnya salah dilaporkan sebagai `404 ATTEMPT_NOT_FOUND`. Batas waktu diberi toleransi 5 detik untuk autosave terakhir.
+Validasi input untuk semua endpoint: Zod. Respon error berbentuk `{ error: { code, message, details? } }`, dengan `message` dalam Bahasa Indonesia yang siap ditampilkan. ID yang formatnya salah dilaporkan sebagai `404 ATTEMPT_NOT_FOUND`. Di halaman (bukan API), `notFound()` terjadi di dalam konten yang di-*stream* (Partial Prerender), sehingga status HTTP-nya tetap 200, tetapi UI 404 dan `<meta name="robots" content="noindex">` tetap tampil. Ini perilaku bawaan Next.js untuk streaming. Batas waktu diberi toleransi 5 detik untuk autosave terakhir.
 
 **Paket ujian (implementasi):** `standar` (25/15/10, 60 menit), `lv1` dan `lv2` (25/15/10 dari level tsb + UMUM, 60 menit), `lv3` (30/10/10, karena LV3 tidak punya soal Multi/B-S sendiri, 60 menit), dan `lengkap` (250 soal, tanpa timer). Setiap preset diuji 300× terhadap bank soal asli agar selalu bisa terisi.
 
@@ -444,11 +448,11 @@ UI primitif (Dialog, Sheet) dibuat sendiri di atas elemen native `<dialog>` atau
 
 | Tahap | Lingkup | Selesai jika |
 |---|---|---|
-| **0. Fondasi** | Install dependensi, Prisma 7 + `prisma.config.ts`, koneksi Supabase, struktur folder, `cn`, design tokens & font | `prisma migrate dev` sukses ke Supabase; halaman kosong dengan tema tampil |
-| **1. Bank soal** | Transkripsi 250 soal ke `questions.json`, skema Zod, seed idempotent, test validasi data | `prisma db seed` → 250 soal; test data hijau |
-| **2. Domain & API** | DAL, services (`question-picker`, `scoring`, attempt), route handlers, server action | Unit test hijau; alur API lengkap teruji manual |
-| **3. UI Ujian** | Landing, ruang ujian (3 tipe soal, navigator, autosave, ragu, submit, resume) | Ujian bisa dikerjakan end-to-end di HP & desktop |
-| **4. UI Hasil** | Halaman hasil + review | Skor & pembahasan tampil benar |
+| **0. Fondasi** ✅ | Install dependensi, Prisma 7 + `prisma.config.ts`, koneksi Supabase, struktur folder, `cn`, design tokens & font | `prisma migrate dev` sukses ke Supabase; halaman kosong dengan tema tampil |
+| **1. Bank soal** ✅ | Transkripsi 250 soal ke `questions.json`, skema Zod, seed idempotent, test validasi data | `prisma db seed` → 250 soal; test data hijau |
+| **2. Domain & API** ✅ | DAL, services (`question-picker`, `scoring`, attempt), route handlers, server action | Unit test hijau; alur API lengkap teruji manual |
+| **3. UI Ujian** ✅ | Landing, ruang ujian (3 tipe soal, navigator, autosave, ragu, submit, resume) | Ujian bisa dikerjakan end-to-end di HP & desktop |
+| **4. UI Hasil** ✅ | Halaman hasil + review | Skor & pembahasan tampil benar |
 | **5. Polish** | Animasi, shortcut, timer, toggle 中文, dark mode, a11y pass | Checklist §7 terpenuhi |
 | **6. Deploy** | Vercel + env + migrate deploy + seed production | URL production berjalan |
 | **7. (P2)** | Rekap admin / leaderboard (sesuai keputusan §12) | — |

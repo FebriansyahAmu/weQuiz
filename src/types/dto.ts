@@ -81,6 +81,9 @@ export interface ReviewQuestionDTO extends Omit<PublicQuestionDTO, "options"> {
 
 export interface AttemptReviewDTO {
   attemptId: string;
+  participantName: string;
+  status: Exclude<AttemptStatusValue, "IN_PROGRESS">;
+  score: number;
   questions: ReviewQuestionDTO[];
 }
 

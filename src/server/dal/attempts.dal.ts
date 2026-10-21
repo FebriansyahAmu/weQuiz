@@ -171,6 +171,8 @@ export function findAttemptReview(id: string) {
     select: {
       id: true,
       status: true,
+      participantName: true,
+      score: true,
       questions: {
         orderBy: { position: "asc" },
         select: {
